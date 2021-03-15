@@ -1,4 +1,4 @@
-# Event Monitor
+# AWS Event Monitor
 Provides real-time event notifications from AWS accounts using CloudWatch Event Rules to Slack.
 
 ## Purpose
