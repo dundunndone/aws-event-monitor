@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >
+  event-monitor-member - Forwards events from secondary accounts to EventBus.
+Parameters:
+  AccountAliasesName:
+    Type: String
+    Default: ''
+    Description: Include account ID and alias for each target account to monitor    
+  MiscEventNames:
+    Type: String
+    Default: '["AssociateIamInstanceProfile","AddRoleToInstanceProfile"]'
+    Description: Miscelanous event names to monitor. Event names should match the 'OtherEvents' CloudWatch event rule
+
+Resources:
+  PublicBucketEventRule:
+    Type: "AWS::Events::Rule"
+    Properties:
+      Name: 'PublicBucket-Events'
+      Description: 'Sends public bucket events to Slack'
+      EventPattern:
+        detail-type:
+          - AWS API Call via CloudTrail
+        detail:
+          eventSource:
+            - s3.amazonaws.com
+          eventName:
+            - PutBucketAcl
+          requestParameters:
+            AccessControlPolicy:
+               AccessControlList:
+                 Grant:
+                   Grantee:
+                     URI:
+                       - "http://acs.amazonaws.com/groups/global/AllUsers"
+                       - "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
+      State: ENABLED
+      Targets:
+        - Arn: !ImportValue 'event-bus-IAMRole'
+          Id: PublicBucketEventsSlack
+  MiscEventsRule:
+    Type: 'AWS::Events::Rule'
+    Properties:
+      Name: 'Misc-Events'  #Generic Event Rule
+      Description: 'Sends various events to Slack'
+      EventPattern:
+        detail-type:
+          - AWS API Call via CloudTrail
+        detail:
+          eventName:
+            - AssociateIamInstanceProfile
+            - AddRoleToInstanceProfile
+      State: ENABLED
+      Targets:
+        - Arn: !ImportValue 'event-bus-IAMRole'
+          Id: MiscEventsSlack

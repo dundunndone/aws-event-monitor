@@ -1,0 +1,58 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: |
+  event-monitor-member - Contains IAM resources. Deploy as StackSet secondary accounts in us-east-1 only.
+Parameters:
+  EventBusRoleName:
+    Type: String
+    Default: EventBus-Monitor-Role
+    Description: IAM Role name used send events from secondary accounts to Event Bus.
+  PrimaryAccountID:
+    Type: String
+    Default: ''
+    Description: Primary Account ID of EventBus
+    MinLength: '12'
+    AllowedPattern: "[0-9]*"
+    ConstraintDescription: Add 12-digit AWS account ID
+Resources:
+  EventBusRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Ref 'EventBusRoleName'
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'sts:AssumeRole'
+            Principal:
+              Service:
+                - events.amazonaws.com
+  EventBusPolicy:
+    Type: 'AWS::IAM::ManagedPolicy'
+    Properties:
+      ManagedPolicyName: !Join 
+        - '-'
+        - - !Ref 'EventBusRoleName'
+          - policy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: Events
+            Effect: Allow
+            Action:
+              - 'events:PutEvents'
+            Resource:
+              - !Sub 'arn:aws:events:*:${PrimaryAccountID}:event-bus/default'
+      Roles:
+        - !Ref EventBusRole
+Outputs:
+  EventBusIAMRole:
+    Description: IAM Role used to send events to EventBus
+    Value: !GetAtt 'EventBusRole.Arn'
+    Export:
+      Name: 'event-bus-IAMRole'
+  PrimaryAccountID:
+    Description: Account ID for EventBus
+    Value: !Ref 'PrimaryAccountID'
+    Export:
+      Name: 'event-bus-acctid'

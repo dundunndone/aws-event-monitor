@@ -1,0 +1,29 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: |
+  event-monitor - Creates S3 buckets used for Lambda functions. Deploy as StackSet to all regions.
+Parameters:
+  LambdaRoleName:
+    Type: String
+    Default: Event-Monitor-Role
+    Description: IAM Role name used for Lambda and Slack Alarms
+  LambdaBucketNamePrefix:
+    Type: String
+    Default: 'target-lambda-bucket'
+    Description: S3 bucket containing Lambda functions
+Resources:
+  LambdaBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Join 
+        - ''
+        - - !Ref 'LambdaBucketNamePrefix'
+          - '-'                    
+          - !Ref 'AWS::AccountId'
+      VersioningConfiguration:
+        Status: Enabled
+Outputs:
+  EventMonitorLambdaCodeBucket:
+    Description: S3 bucket containing Lambda functions
+    Value: !Ref 'LambdaBucket'
+    Export:
+      Name: 'event-monitor-LambdaBucket'
