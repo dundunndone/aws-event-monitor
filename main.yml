@@ -1,0 +1,111 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: |
+  event-monitor - Contains IAM and event log S3 bucket. Deploy as StackSet to us-east-1 only.
+Parameters:
+  LambdaRoleName:
+    Type: String
+    Default: Event-Monitor-Role
+    Description: IAM Role name used for Lambda and Slack Alarms
+  EventsBucketPrefix:
+    Type: String
+    Default: 'target-eventlog-bucket'
+    Description: S3 bucket contains event logs
+Resources:
+  EventsLogsBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Join 
+        - ''
+        - - !Ref 'EventsBucketPrefix'
+          - '-'
+          - !Ref 'AWS::AccountId'
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Status: Enabled
+            ExpirationInDays: 30
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+  LambdaSlackEventsRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Ref 'LambdaRoleName'
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'sts:AssumeRole'
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+  LambdaSlackEventsPolicy:
+    Type: 'AWS::IAM::ManagedPolicy'
+    Properties:
+      ManagedPolicyName: !Join 
+        - '-'
+        - - !Ref 'LambdaRoleName'
+          - policy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: MainLambdaLogging
+            Effect: Allow
+            Action:
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+            Resource:
+              - !Sub 'arn:aws:logs:*:${AWS::AccountId}:*'
+              - !Sub 'arn:aws:logs:*:${AWS::AccountId}:log-group:*'
+              - !Sub 'arn:aws:logs:*:${AWS::AccountId}:log-group:*:log-stream:*'
+          - Sid: SlackAlerts
+            Effect: Allow
+            Action:
+              - 's3:*'
+            Resource: !Join 
+              - ''
+              - - 'arn:aws:s3:::'
+                - !GetAtt 
+                  - EventsLogsBucket
+                  - Arn
+                - /*
+          - Sid: CustomGetLambda
+            Effect: Allow
+            Action:
+              - 's3:GetObject'
+            Resource: !Join 
+              - ''
+              - - 'arn:aws:s3:::'
+                - !GetAtt 
+                  - LambdaBucket
+                  - Arn
+                - /*
+          - Sid: CustomSGEvents
+            Effect: Allow
+            Action:
+              - 'ec2:DescribeStaleSecurityGroups'
+              - 'ec2:DescribeSecurityGroup*'
+            Resource: '*'
+          - Sid: CustomOtherEvents
+            Effect: Allow
+            Action:
+              - 'events:DescribeRule'
+            Resource:
+              - !Sub 'arn:aws:events:*:${AWS::AccountId}:rule:OtherEvents'
+      Roles:
+        - !Ref LambdaSlackEventsRole
+Outputs:
+  EventMonitorIAMRole:
+    Description: IAM Role used for event-monitor
+    Value: !GetAtt 'LambdaSlackEventsRole.Arn'
+    Export:
+      Name: 'event-monitor-IAMRole'
+  EventMonitorLogBucket:
+    Description: S3 bucket contains event logs
+    Value: !Ref 'EventsLogsBucket'
+    Export:
+      Name: 'event-monitor-EventLogBucket'

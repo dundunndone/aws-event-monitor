@@ -1,0 +1,112 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >
+  event-monitor - Sends critical event notifications in real-time.
+Parameters:
+  MainFunctionName:
+    Type: String
+    Default: 'event-monitor-slack-events'
+    Description: 'Lambda function name for Slack-based events'
+  AccountAliasesName:
+    Type: String
+    Default: ''
+    Description: 'Add all account ID & alias {"accountID":"accountAlias"} for each target account to monitor' 
+  SlackHook:
+    Type: String
+    Default: ''
+    Description: Slack Webhook URL
+  MiscEventNames:
+    Type: String
+    Default: '["AssociateIamInstanceProfile","AddRoleToInstanceProfile"]'
+    Description: 'Add list of misc. event names to monitor. Event names should match the OtherEvents CloudWatch event rule'   
+
+Resources:
+  LambdaLayer:
+    Type: 'AWS::Lambda::LayerVersion'
+    Properties:
+      LayerName: requests-layer
+      Description: Supports requests package 
+      Content:
+        S3Bucket: !ImportValue 'event-monitor-LambdaBucket'
+        S3Key: !Join [ '', ['layers/requests.zip']]
+      CompatibleRuntimes:
+        - 'python3.7'
+  MainSlackEventsFunction:
+    Type: 'AWS::Lambda::Function'  
+    Properties:
+      FunctionName: !Ref 'MainFunctionName'
+      Code:
+        S3Bucket: !ImportValue 'event-monitor-LambdaBucket'
+        S3Key: !Join [ '', ['slack/index.zip']]
+      Description: Formats target events and sends to Slack
+      Handler: index.lambda_handler
+      Environment:
+        Variables:
+          EVENTS_LOGS_BUCKET: !ImportValue 'event-monitor-EventLogBucket'
+          SLACK_WEBHOOK: !Ref 'SlackHook'
+          accountAliases: !Ref 'AccountAliasesName'
+          otherEvents: !Ref 'MiscEventNames'
+      Role: !ImportValue 'event-monitor-IAMRole'
+      Runtime: python3.7
+      Layers: 
+        - !Ref 'LambdaLayer'    
+      Timeout: 30
+      MemorySize: 1024
+#Event Rules
+  PublicBucketEventRule:
+    Type: "AWS::Events::Rule"
+    Properties:
+      Name: 'PublicBucket-Events'
+      Description: 'Sends public bucket events to Slack'
+      EventPattern:
+        detail-type:
+          - AWS API Call via CloudTrail
+        detail:
+          eventSource:
+            - s3.amazonaws.com
+          eventName:
+            - PutBucketAcl
+          requestParameters:
+            AccessControlPolicy:
+               AccessControlList:
+                 Grant:
+                   Grantee:
+                     URI:
+                       - "http://acs.amazonaws.com/groups/global/AllUsers"
+                       - "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt MainSlackAlertsFunction.Arn
+          Id: EventsPublicS3Bucket
+  PublicBucketLambdaPermission:
+    Type: "AWS::Lambda::Permission"
+    DependsOn:
+      - MainSlackEventsFunction
+    Properties:
+      FunctionName: !GetAtt MainSlackEventsFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt S3BucketPublicEventRule.Arn
+
+  MiscEventsRule:
+    Type: 'AWS::Events::Rule'
+    Properties:
+      Name: 'Misc-Events'  #Generic Event Rule
+      Description: 'Sends various events to Slack'
+      EventPattern:
+        detail:
+          eventName:
+            - AssociateIamInstanceProfile
+            - AddRoleToInstanceProfile
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt MainSlackEventsFunction.Arn
+          Id: MiscEventsSlack
+  MiscEventsLambdaPermission:
+    Type: 'AWS::Lambda::Permission'
+    DependsOn:
+      - MainSlackEventsFunction
+    Properties:
+      FunctionName: !GetAtt MainSlackEventsFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt MiscEventsRule.Arn
