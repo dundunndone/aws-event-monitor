@@ -9,7 +9,7 @@ Event monitor was created to provide event notifications in real time. This tool
 
 ## Pre-Reqs
 
-* Deploying Lambda Layer (included) to support the python requests module
+* Deploying Lambda Layer (included) to support the python requests module.
 * For Slack, you will need to create a Slack channel and setup an Incoming Webhook to send your events to.
 
 
