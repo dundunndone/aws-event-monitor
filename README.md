@@ -7,6 +7,9 @@ Lets be real, companies need 100% visibility on activity happening across all ac
 
 Event monitor was created to provide event notifications in real time. This tool can quickly alert you to any new public S3 bucket, snapshot shared cross-account, public security group rule, and other critical events across your AWS accounts.
 
+![AWS Event Monitor Diagram](https://github.com/sdunn15/aws-event-monitor/images/workflow.jpg)
+
+
 ## Pre-Reqs
 
 * Deploying Lambda Layer (included) to support the python requests module.
